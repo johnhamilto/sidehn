@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "SideHN",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "The web, with a side of HackerNews. Shows a sidebar with HN comments if the link was opened from HN",
   "author": "Alin Panaitiu",
   "homepage_url": "https://github.com/alin23/sidehn",

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "SideHN",
-  "version": "1.0.1",
+  "version": "1.0.4",
   "description": "The web, with a side of HackerNews. Shows a sidebar with HN comments if the link was opened from HN",
   "author": "Alin Panaitiu",
   "homepage_url": "https://github.com/alin23/sidehn",
@@ -17,10 +17,15 @@
   "permissions": [
     "activeTab",
     "tabs",
+    "webNavigation",
     "storage",
     "declarativeNetRequest",
-    "cookies"
+    "cookies",
+    "sidePanel"
   ],
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
   "content_scripts": [
     {
       "matches": ["https://news.ycombinator.com/*", "*://*/*?*hnid=*"],
@@ -28,7 +33,7 @@
       "run_at": "document_end"
     }
   ],
-  "minimum_chrome_version": "102.0",
+  "minimum_chrome_version": "114",
   "action": {
     "default_icon": {
       "16": "icon@16.png",
