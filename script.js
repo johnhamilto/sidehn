@@ -11,6 +11,7 @@ async function setup() {
   }
 
   // Intercept clicks on article links to open the side panel.
+  const api = typeof browser !== "undefined" ? browser : chrome;
   document.addEventListener("click", (e) => {
     const link = e.target.closest("a");
     if (!link) return;
@@ -18,7 +19,7 @@ async function setup() {
     // Find the parent story row to get the HN item ID.
     const row = link.closest("tr.athing");
     if (row && row.id) {
-      browser.runtime.sendMessage({
+      api.runtime.sendMessage({
         type: "hn-link-clicked",
         id: row.id,
         hostname: new URL(link.href, location.href).hostname,
@@ -29,7 +30,7 @@ async function setup() {
     // Also handle clicks on "N comments" links (e.g. from comment pages).
     const itemMatch = link.href && link.href.match(/item\?id=(\d+)/);
     if (itemMatch && !link.href.includes("news.ycombinator.com")) {
-      browser.runtime.sendMessage({
+      api.runtime.sendMessage({
         type: "hn-link-clicked",
         id: itemMatch[1],
         hostname: new URL(link.href, location.href).hostname,

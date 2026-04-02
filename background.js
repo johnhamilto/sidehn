@@ -122,6 +122,8 @@ function activateTab(tabId, hnid, hostname) {
   }
   browser.action.setBadgeText({ tabId, text: "HN" });
   browser.action.setBadgeBackgroundColor({ tabId, color: "#ff6600" });
+  // Enable the panel for this tab. Set once, Chrome handles show/hide on tab switch.
+  browser.sidePanel.setOptions({ tabId, path: "sidepanel.html", enabled: true });
 
   // Only reload the side panel iframe if the hnid actually changed.
   if (prevHnid !== hnid) {
@@ -144,15 +146,7 @@ function deactivateTab(tabId) {
   tabHnids.delete(tabId);
   tabHostnames.delete(tabId);
   browser.action.setBadgeText({ tabId, text: "" });
-
-  // Close the panel. Use close() if available (Chrome 141+), fall back to per-tab disable.
-  if (browser.sidePanel.close) {
-    browser.tabs.get(tabId).then((tab) => {
-      browser.sidePanel.close({ windowId: tab.windowId }).catch(() => {});
-    }).catch(() => {});
-  } else {
-    browser.sidePanel.setOptions({ tabId, enabled: false }).catch(() => {});
-  }
+  browser.sidePanel.setOptions({ tabId, enabled: false }).catch(() => {});
 }
 
 // Handle messages from content scripts and the side panel.
@@ -180,13 +174,7 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "domain-disabled") {
     browser.tabs.query({ active: true, lastFocusedWindow: true }).then((tabs) => {
       if (!tabs[0]) return;
-      const tabId = tabs[0].id;
-      tabHnids.delete(tabId);
-      tabHostnames.delete(tabId);
-      browser.action.setBadgeText({ tabId, text: "" });
-      if (browser.sidePanel.close) {
-        browser.sidePanel.close({ windowId: tabs[0].windowId }).catch(() => {});
-      }
+      deactivateTab(tabs[0].id);
     });
   }
 });
@@ -232,4 +220,6 @@ browser.tabs.onRemoved.addListener((tabId) => {
 
 // Ensure the icon click shows the popup, not the side panel.
 browser.sidePanel.setPanelBehavior({ openPanelOnActionClick: false });
+// Disable the panel globally - only enabled per-tab when activated from HN.
+browser.sidePanel.setOptions({ enabled: false });
 setupCookies();
