@@ -36,6 +36,15 @@
       "all_frames": true
     }
   ],
+  "sidebar_action": {
+    "default_panel": "sidepanel.html",
+    "default_title": "SideHN",
+    "default_icon": {
+      "16": "icon@16.png",
+      "48": "icon@48.png"
+    },
+    "open_at_install": false
+  },
   "browser_specific_settings": {
     "gecko": {
       "id": "sidehn@lowtechguys.com",

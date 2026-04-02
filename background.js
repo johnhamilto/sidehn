@@ -2,6 +2,47 @@ if (!('browser' in self)) {
   self.browser = self.chrome;
 }
 
+// Abstraction over Chrome sidePanel and Firefox sidebarAction.
+const isChrome = !!browser.sidePanel;
+const sidebar = {
+  open(options) {
+    if (isChrome) {
+      return browser.sidePanel.open(options).catch(() => {});
+    }
+    // Firefox requires a direct user gesture - auto-open from message handlers
+    // doesn't work. The user opens via the toolbar icon or popup button.
+    return browser.sidebarAction.open().catch(() => {});
+  },
+  close() {
+    if (isChrome) {
+      return Promise.resolve(); // Chrome uses per-tab enable/disable
+    }
+    return browser.sidebarAction.close().catch(() => {});
+  },
+  enableForTab(tabId) {
+    if (isChrome) {
+      browser.sidePanel.setOptions({ tabId, path: "sidepanel.html", enabled: true });
+    }
+    // Firefox sidebar is always available once opened, no per-tab enable needed.
+  },
+  disableForTab(tabId) {
+    if (isChrome) {
+      browser.sidePanel.setOptions({ tabId, enabled: false }).catch(() => {});
+    }
+    // Firefox: close the sidebar when deactivating.
+    if (!isChrome) {
+      browser.sidebarAction.close().catch(() => {});
+    }
+  },
+  init() {
+    if (isChrome) {
+      browser.sidePanel.setPanelBehavior({ openPanelOnActionClick: false });
+      browser.sidePanel.setOptions({ enabled: false });
+    }
+    // Firefox sidebar is configured via manifest sidebar_action.
+  },
+};
+
 // Track hnid and hostname per tab.
 const tabHnids = new Map();
 const tabHostnames = new Map();
@@ -122,8 +163,7 @@ function activateTab(tabId, hnid, hostname) {
   }
   browser.action.setBadgeText({ tabId, text: "HN" });
   browser.action.setBadgeBackgroundColor({ tabId, color: "#ff6600" });
-  // Enable the panel for this tab. Set once, Chrome handles show/hide on tab switch.
-  browser.sidePanel.setOptions({ tabId, path: "sidepanel.html", enabled: true });
+  sidebar.enableForTab(tabId);
 
   // Only reload the side panel iframe if the hnid actually changed.
   if (prevHnid !== hnid) {
@@ -146,7 +186,7 @@ function deactivateTab(tabId) {
   tabHnids.delete(tabId);
   tabHostnames.delete(tabId);
   browser.action.setBadgeText({ tabId, text: "" });
-  browser.sidePanel.setOptions({ tabId, enabled: false }).catch(() => {});
+  sidebar.disableForTab(tabId);
 }
 
 // Handle messages from content scripts and the side panel.
@@ -155,9 +195,7 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (disabledDomains[message.hostname]) return;
     const tabId = sender.tab.id;
     activateTab(tabId, message.id, message.hostname);
-    browser.sidePanel.open({ tabId }).catch((err) => {
-      console.log(`[SideHN] auto-open failed:`, err);
-    });
+    sidebar.open({ tabId });
   }
 
   if (message.type === "get-hn-id") {
@@ -226,8 +264,5 @@ browser.tabs.onRemoved.addListener((tabId) => {
   tabHostnames.delete(tabId);
 });
 
-// Ensure the icon click shows the popup, not the side panel.
-browser.sidePanel.setPanelBehavior({ openPanelOnActionClick: false });
-// Disable the panel globally - only enabled per-tab when activated from HN.
-browser.sidePanel.setOptions({ enabled: false });
+sidebar.init();
 setupCookies();

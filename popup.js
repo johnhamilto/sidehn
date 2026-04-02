@@ -46,9 +46,10 @@ async function setup() {
   if (response && response.id) {
     openPanelButton.style.display = "block";
     openPanelButton.addEventListener("click", () => {
-      browser.sidePanel.open({ tabId: tab.id }).then(() => {
-        window.close();
-      }).catch(() => {});
+      const openFn = browser.sidePanel
+        ? browser.sidePanel.open({ tabId: tab.id })
+        : browser.sidebarAction.open();
+      openFn.then(() => window.close()).catch(() => {});
     });
   }
 
