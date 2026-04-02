@@ -13,11 +13,10 @@
   "background": {
     "service_worker": "background.js"
   },
-  "host_permissions": ["https://news.ycombinator.com/*", "*://*/*?*hnid=*"],
+  "host_permissions": ["https://news.ycombinator.com/*"],
   "permissions": [
     "activeTab",
     "tabs",
-    "webNavigation",
     "storage",
     "declarativeNetRequest",
     "cookies",
@@ -28,9 +27,17 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://news.ycombinator.com/*", "*://*/*?*hnid=*"],
+      "matches": ["https://news.ycombinator.com/*"],
+      "css": ["hn-iframe.css"],
+      "js": ["hn-iframe-early.js"],
+      "run_at": "document_start",
+      "all_frames": true
+    },
+    {
+      "matches": ["https://news.ycombinator.com/*"],
       "js": ["browser-polyfill.min.js", "script.js"],
-      "run_at": "document_end"
+      "run_at": "document_end",
+      "all_frames": true
     }
   ],
   "minimum_chrome_version": "114",

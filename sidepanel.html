@@ -3,23 +3,101 @@
   <head>
     <meta charset="utf-8" />
     <style>
-      * { margin: 0; padding: 0; }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
       html, body { width: 100%; height: 100%; overflow: hidden; }
-      body { background: #f6f6ef; }
-      iframe {
+      body {
+        background: #f6f6ef;
+        display: flex;
+        flex-direction: column;
+      }
+      #toolbar {
+        display: flex;
+        align-items: center;
+        padding: 4px 8px;
+        background: transparent;
+        font-family: Verdana, Geneva, sans-serif;
+        font-size: 11px;
+        color: #828282;
+        flex-shrink: 0;
+        gap: 8px;
+      }
+      #gear {
+        background: none;
+        border: none;
+        cursor: pointer;
+        font-size: 14px;
+        padding: 2px 4px;
+        color: #828282;
+        line-height: 1;
+      }
+      #gear:hover {
+        color: #000;
+      }
+      .controls {
+        display: none;
+        align-items: center;
+        gap: 8px;
+      }
+      .controls.visible {
+        display: flex;
+      }
+      .controls button {
+        background: none;
+        border: 1px solid #828282;
+        border-radius: 3px;
+        padding: 2px 6px;
+        cursor: pointer;
+        font-family: inherit;
+        font-size: 11px;
+        color: #828282;
+      }
+      .controls button:hover {
+        color: #000;
+        border-color: #000;
+      }
+      .controls label {
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+      #frame-container {
+        flex: 1;
+        position: relative;
+        overflow: hidden;
+      }
+      #frame-container iframe {
+        position: absolute;
+        top: 0;
+        left: 0;
         width: 100%;
         height: 100%;
         border: none;
-        opacity: 0;
-        transition: opacity 0.15s ease;
       }
-      iframe.loaded {
-        opacity: 1;
+      #frame-container iframe.behind {
+        z-index: 0;
+      }
+      #frame-container iframe.front {
+        z-index: 1;
       }
     </style>
   </head>
   <body>
-    <iframe id="hn-frame"></iframe>
+    <div id="toolbar">
+      <button id="gear">&#9881;</button>
+      <div class="controls" id="controls">
+        <label>
+          <input type="checkbox" id="persist" />
+          Keep open
+        </label>
+        <button id="disable-domain">Disable</button>
+      </div>
+    </div>
+    <div id="frame-container">
+      <iframe id="hn-frame-a" class="front"></iframe>
+      <iframe id="hn-frame-b" class="behind"></iframe>
+    </div>
+    <script src="browser-polyfill.min.js"></script>
     <script src="sidepanel.js"></script>
   </body>
 </html>

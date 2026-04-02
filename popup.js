@@ -16,7 +16,7 @@ hasPermission = () => {
 
 requestPermission = () => {
   return browser.permissions.request({
-    origins: ["https://news.ycombinator.com/*", "*://*/*?*hnid=*"],
+    origins: ["https://news.ycombinator.com/*"],
   });
 };
 
@@ -40,6 +40,18 @@ async function setup() {
   )[0];
   const url = new URL(tab.url);
 
+  // Check if this tab has HN content and offer to open the side panel.
+  const openPanelButton = document.getElementById("open-panel");
+  const response = await browser.runtime.sendMessage({ type: "get-hn-id" });
+  if (response && response.id) {
+    openPanelButton.style.display = "block";
+    openPanelButton.addEventListener("click", () => {
+      browser.sidePanel.open({ tabId: tab.id }).then(() => {
+        window.close();
+      }).catch(() => {});
+    });
+  }
+
   const toggleHostButton = document.getElementById("toggle-host");
   toggleHostButton.addEventListener("click", () => {
     if (!settings.disabledDomains) {
@@ -52,7 +64,6 @@ async function setup() {
         disabledDomains: settings.disabledDomains,
       })
       .then(() => {
-        browser.tabs.reload();
         toggleHostButton.innerHTML = `<b>${
           settings.disabledDomains[url.hostname] ? "Enable" : "Disable"
         }</b> for <code>${url.hostname}</code>`;

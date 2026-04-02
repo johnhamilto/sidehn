@@ -2,8 +2,29 @@ if (!('browser' in self)) {
   self.browser = self.chrome;
 }
 
-// Track hnid per tab.
+// Track hnid and hostname per tab.
 const tabHnids = new Map();
+const tabHostnames = new Map();
+let lastHnid = null;
+let lastHostname = null;
+let persist = false;
+let disabledDomains = {};
+
+// Load settings into memory.
+browser.storage.sync.get(["persistSidePanel", "disabledDomains"]).then((settings) => {
+  persist = settings.persistSidePanel || false;
+  disabledDomains = settings.disabledDomains || {};
+});
+
+// Keep in-memory cache in sync.
+browser.storage.onChanged.addListener((changes) => {
+  if (changes.disabledDomains) {
+    disabledDomains = changes.disabledDomains.newValue || {};
+  }
+  if (changes.persistSidePanel) {
+    persist = changes.persistSidePanel.newValue || false;
+  }
+});
 
 async function toggleCookieIframeInjector(cookie) {
   var cookie =
@@ -91,50 +112,55 @@ async function setupCookies() {
   await toggleCookieIframeInjector();
 }
 
-function activateTab(tabId, hnid) {
-  console.log(`[SideHN] activateTab ${tabId} with hnid=${hnid}`);
+function activateTab(tabId, hnid, hostname) {
+  const prevHnid = tabHnids.get(tabId);
   tabHnids.set(tabId, hnid);
-  browser.action.setPopup({ tabId, popup: "" });
+  lastHnid = hnid;
+  if (hostname) {
+    tabHostnames.set(tabId, hostname);
+    lastHostname = hostname;
+  }
   browser.action.setBadgeText({ tabId, text: "HN" });
   browser.action.setBadgeBackgroundColor({ tabId, color: "#ff6600" });
-  browser.sidePanel.setOptions({ tabId, path: "sidepanel.html", enabled: true });
 
-  // Update an already-open side panel.
-  browser.runtime.sendMessage({
-    type: "load-hn-item",
-    id: hnid,
-  }).catch(() => {});
+  // Only reload the side panel iframe if the hnid actually changed.
+  if (prevHnid !== hnid) {
+    browser.runtime.sendMessage({
+      type: "load-hn-item",
+      id: hnid,
+    }).catch(() => {});
+  }
+  if (hostname) {
+    browser.runtime.sendMessage({
+      type: "update-hostname",
+      hostname,
+    }).catch(() => {});
+  }
 }
 
 function deactivateTab(tabId) {
-  console.log(`[SideHN] deactivateTab ${tabId}`);
-  tabHnids.delete(tabId);
-  browser.action.setPopup({ tabId, popup: "popup.html" });
-  browser.action.setBadgeText({ tabId, text: "" });
-  browser.sidePanel.setOptions({ tabId, enabled: false }).catch(() => {});
-}
+  if (persist) return;
 
-// Capture hnid from navigation URLs before server redirects can strip them.
-browser.webNavigation.onBeforeNavigate.addListener((details) => {
-  if (details.frameId !== 0) return;
-  try {
-    const url = new URL(details.url);
-    const hnid = url.searchParams.get("hnid");
-    if (hnid) {
-      activateTab(details.tabId, hnid);
-    }
-  } catch (e) {}
-});
+  tabHnids.delete(tabId);
+  tabHostnames.delete(tabId);
+  browser.action.setBadgeText({ tabId, text: "" });
+
+  // Close the panel. Use close() if available (Chrome 141+), fall back to per-tab disable.
+  if (browser.sidePanel.close) {
+    browser.tabs.get(tabId).then((tab) => {
+      browser.sidePanel.close({ windowId: tab.windowId }).catch(() => {});
+    }).catch(() => {});
+  } else {
+    browser.sidePanel.setOptions({ tabId, enabled: false }).catch(() => {});
+  }
+}
 
 // Handle messages from content scripts and the side panel.
 browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.type === "open-side-panel" && message.id) {
-    activateTab(sender.tab.id, message.id);
-  }
-
   if (message.type === "hn-link-clicked" && message.id) {
+    if (disabledDomains[message.hostname]) return;
     const tabId = sender.tab.id;
-    activateTab(tabId, message.id);
+    activateTab(tabId, message.id, message.hostname);
     browser.sidePanel.open({ tabId }).catch((err) => {
       console.log(`[SideHN] auto-open failed:`, err);
     });
@@ -142,42 +168,68 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message.type === "get-hn-id") {
     browser.tabs.query({ active: true, lastFocusedWindow: true }).then((tabs) => {
-      const id = tabs[0] ? tabHnids.get(tabs[0].id) : null;
-      sendResponse({ id });
+      const tabId = tabs[0] ? tabs[0].id : null;
+      const id = (tabId && tabHnids.get(tabId)) || (persist ? lastHnid : null);
+      const hostname = (tabId && tabHostnames.get(tabId)) || (persist ? lastHostname : null);
+      sendResponse({ id, hostname });
     });
     return true;
   }
+
+
+  if (message.type === "domain-disabled") {
+    browser.tabs.query({ active: true, lastFocusedWindow: true }).then((tabs) => {
+      if (!tabs[0]) return;
+      const tabId = tabs[0].id;
+      tabHnids.delete(tabId);
+      tabHostnames.delete(tabId);
+      browser.action.setBadgeText({ tabId, text: "" });
+      if (browser.sidePanel.close) {
+        browser.sidePanel.close({ windowId: tabs[0].windowId }).catch(() => {});
+      }
+    });
+  }
 });
 
-// React to tab navigation - deactivate when returning to HN or leaving an hnid page.
+// React to tab navigation.
 browser.tabs.onUpdated.addListener(function (tabId, changeInfo) {
   if (changeInfo.status === "complete") {
     setupCookies();
   }
 
   if (changeInfo.url) {
-    console.log(`[SideHN] tab ${tabId} URL changed to ${changeInfo.url}`);
     const url = new URL(changeInfo.url);
     if (url.hostname === "news.ycombinator.com") {
-      deactivateTab(tabId);
-    } else if (!url.searchParams.get("hnid") && !tabHnids.has(tabId)) {
       deactivateTab(tabId);
     }
   }
 });
 
+// Handle tab switching - update content via messages, never reload the panel.
+browser.tabs.onActivated.addListener((activeInfo) => {
+  const tabId = activeInfo.tabId;
+
+  if (tabHnids.has(tabId)) {
+    browser.runtime.sendMessage({
+      type: "load-hn-item",
+      id: tabHnids.get(tabId),
+    }).catch(() => {});
+    const hostname = tabHostnames.get(tabId);
+    if (hostname) {
+      browser.runtime.sendMessage({
+        type: "update-hostname",
+        hostname,
+      }).catch(() => {});
+    }
+  }
+  // If no hnid for this tab, just leave the panel showing whatever it has.
+});
+
 browser.tabs.onRemoved.addListener((tabId) => {
   tabHnids.delete(tabId);
+  tabHostnames.delete(tabId);
 });
 
-// When the icon is clicked (popup disabled for this tab), open the side panel.
-browser.action.onClicked.addListener((tab) => {
-  console.log(`[SideHN] action.onClicked for tab ${tab.id}`);
-  browser.sidePanel.open({ tabId: tab.id }).then(() => {
-    console.log(`[SideHN] sidePanel.open succeeded`);
-  }).catch((err) => {
-    console.error(`[SideHN] sidePanel.open failed:`, err);
-  });
-});
-
+// Ensure the icon click shows the popup, not the side panel.
+browser.sidePanel.setPanelBehavior({ openPanelOnActionClick: false });
 setupCookies();
