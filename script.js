@@ -24,17 +24,6 @@ async function setup() {
         id: row.id,
         hostname: new URL(link.href, location.href).hostname,
       });
-      return;
-    }
-
-    // Also handle clicks on "N comments" links (e.g. from comment pages).
-    const itemMatch = link.href && link.href.match(/item\?id=(\d+)/);
-    if (itemMatch && !link.href.includes("news.ycombinator.com")) {
-      api.runtime.sendMessage({
-        type: "hn-link-clicked",
-        id: itemMatch[1],
-        hostname: new URL(link.href, location.href).hostname,
-      });
     }
   });
 }

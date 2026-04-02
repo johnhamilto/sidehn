@@ -171,7 +171,6 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
-
   if (message.type === "domain-disabled") {
     browser.tabs.query({ active: true, lastFocusedWindow: true }).then((tabs) => {
       if (!tabs[0]) return;
