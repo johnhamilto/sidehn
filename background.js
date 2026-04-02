@@ -2,6 +2,71 @@ if (!('browser' in self)) {
   self.browser = self.chrome;
 }
 
+// Abstraction over Chrome sidePanel and Firefox sidebarAction.
+const isChrome = !!browser.sidePanel;
+const sidebar = {
+  open(options) {
+    if (isChrome) {
+      return browser.sidePanel.open(options).catch(() => {});
+    }
+    // Firefox requires a direct user gesture - auto-open from message handlers
+    // doesn't work. The user opens via the toolbar icon or popup button.
+    return browser.sidebarAction.open().catch(() => {});
+  },
+  close() {
+    if (isChrome) {
+      return Promise.resolve(); // Chrome uses per-tab enable/disable
+    }
+    return browser.sidebarAction.close().catch(() => {});
+  },
+  enableForTab(tabId) {
+    if (isChrome) {
+      browser.sidePanel.setOptions({ tabId, path: "sidepanel.html", enabled: true });
+    }
+    // Firefox sidebar is always available once opened, no per-tab enable needed.
+  },
+  disableForTab(tabId) {
+    if (isChrome) {
+      browser.sidePanel.setOptions({ tabId, enabled: false }).catch(() => {});
+    }
+    // Firefox: close the sidebar when deactivating.
+    if (!isChrome) {
+      browser.sidebarAction.close().catch(() => {});
+    }
+  },
+  init() {
+    if (isChrome) {
+      browser.sidePanel.setPanelBehavior({ openPanelOnActionClick: false });
+      browser.sidePanel.setOptions({ enabled: false });
+    }
+    // Firefox sidebar is configured via manifest sidebar_action.
+  },
+};
+
+// Track hnid and hostname per tab.
+const tabHnids = new Map();
+const tabHostnames = new Map();
+let lastHnid = null;
+let lastHostname = null;
+let persist = false;
+let disabledDomains = {};
+
+// Load settings into memory.
+browser.storage.sync.get(["persistSidePanel", "disabledDomains"]).then((settings) => {
+  persist = settings.persistSidePanel || false;
+  disabledDomains = settings.disabledDomains || {};
+});
+
+// Keep in-memory cache in sync.
+browser.storage.onChanged.addListener((changes) => {
+  if (changes.disabledDomains) {
+    disabledDomains = changes.disabledDomains.newValue || {};
+  }
+  if (changes.persistSidePanel) {
+    persist = changes.persistSidePanel.newValue || false;
+  }
+});
+
 async function toggleCookieIframeInjector(cookie) {
   var cookie =
     cookie !== undefined
@@ -88,9 +153,116 @@ async function setupCookies() {
   await toggleCookieIframeInjector();
 }
 
-browser.tabs.onUpdated.addListener(function (tabId, changeInfo, tab) {
-  if (changeInfo.status == "complete") {
-    setupCookies();
+function activateTab(tabId, hnid, hostname) {
+  const prevHnid = tabHnids.get(tabId);
+  tabHnids.set(tabId, hnid);
+  lastHnid = hnid;
+  if (hostname) {
+    tabHostnames.set(tabId, hostname);
+    lastHostname = hostname;
+  }
+  browser.action.setBadgeText({ tabId, text: "HN" });
+  browser.action.setBadgeBackgroundColor({ tabId, color: "#ff6600" });
+  sidebar.enableForTab(tabId);
+
+  // Only reload the side panel iframe if the hnid actually changed.
+  if (prevHnid !== hnid) {
+    browser.runtime.sendMessage({
+      type: "load-hn-item",
+      id: hnid,
+    }).catch(() => {});
+  }
+  if (hostname) {
+    browser.runtime.sendMessage({
+      type: "update-hostname",
+      hostname,
+    }).catch(() => {});
+  }
+}
+
+function deactivateTab(tabId) {
+  if (persist) return;
+
+  tabHnids.delete(tabId);
+  tabHostnames.delete(tabId);
+  browser.action.setBadgeText({ tabId, text: "" });
+  sidebar.disableForTab(tabId);
+}
+
+// Handle messages from content scripts and the side panel.
+browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === "hn-link-clicked" && message.id) {
+    if (disabledDomains[message.hostname]) return;
+    const tabId = sender.tab.id;
+    activateTab(tabId, message.id, message.hostname);
+    sidebar.open({ tabId });
+  }
+
+  if (message.type === "get-hn-id") {
+    browser.tabs.query({ active: true, lastFocusedWindow: true }).then((tabs) => {
+      const tabId = tabs[0] ? tabs[0].id : null;
+      const id = (tabId && tabHnids.get(tabId)) || (persist ? lastHnid : null);
+      const hostname = (tabId && tabHostnames.get(tabId)) || (persist ? lastHostname : null);
+      const active = tabId ? tabHnids.has(tabId) : false;
+      sendResponse({ id, hostname, active });
+    });
+    return true;
+  }
+
+  if (message.type === "domain-disabled") {
+    browser.tabs.query({ active: true, lastFocusedWindow: true }).then((tabs) => {
+      if (!tabs[0]) return;
+      deactivateTab(tabs[0].id);
+    });
   }
 });
+
+// React to tab navigation.
+browser.tabs.onUpdated.addListener(function (tabId, changeInfo) {
+  if (changeInfo.status === "complete") {
+    setupCookies();
+    // Re-apply badge after navigation since Chrome resets per-tab badge on navigate.
+    if (tabHnids.has(tabId)) {
+      browser.action.setBadgeText({ tabId, text: "HN" });
+      browser.action.setBadgeBackgroundColor({ tabId, color: "#ff6600" });
+    }
+  }
+
+  if (changeInfo.url) {
+    const url = new URL(changeInfo.url);
+    if (url.hostname === "news.ycombinator.com") {
+      deactivateTab(tabId);
+    } else if (tabHnids.has(tabId)) {
+      browser.action.setBadgeText({ tabId, text: "HN" });
+      browser.action.setBadgeBackgroundColor({ tabId, color: "#ff6600" });
+    }
+  }
+});
+
+// Handle tab switching - update content via messages, never reload the panel.
+browser.tabs.onActivated.addListener((activeInfo) => {
+  const tabId = activeInfo.tabId;
+
+  if (tabHnids.has(tabId)) {
+    browser.runtime.sendMessage({
+      type: "load-hn-item",
+      id: tabHnids.get(tabId),
+    }).catch(() => {});
+    const hostname = tabHostnames.get(tabId);
+    if (hostname) {
+      browser.runtime.sendMessage({
+        type: "update-hostname",
+        hostname,
+      }).catch(() => {});
+    }
+  }
+  // If no hnid for this tab, just leave the panel showing whatever it has.
+});
+
+browser.tabs.onRemoved.addListener((tabId) => {
+  tabHnids.delete(tabId);
+  tabHostnames.delete(tabId);
+});
+
+sidebar.init();
 setupCookies();

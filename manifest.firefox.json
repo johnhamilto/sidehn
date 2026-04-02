@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "SideHN",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "The web, with a side of HackerNews. Shows a sidebar with HN comments if the link was opened from HN",
   "author": "Alin Panaitiu",
   "homepage_url": "https://github.com/alin23/sidehn",
@@ -13,7 +13,7 @@
   "background": {
     "scripts": ["browser-polyfill.min.js", "background.js"]
   },
-  "host_permissions": ["https://news.ycombinator.com/*", "*://*/*?*hnid=*"],
+  "host_permissions": ["https://news.ycombinator.com/*"],
   "permissions": [
     "activeTab",
     "tabs",
@@ -23,12 +23,28 @@
   ],
   "content_scripts": [
     {
-      "matches": ["https://news.ycombinator.com/*", "*://*/*?*hnid=*"],
+      "matches": ["https://news.ycombinator.com/*"],
+      "css": ["hn-iframe.css"],
+      "js": ["hn-iframe-early.js"],
+      "run_at": "document_start",
+      "all_frames": true
+    },
+    {
+      "matches": ["https://news.ycombinator.com/*"],
       "js": ["browser-polyfill.min.js", "script.js"],
-      "run_at": "document_end"
+      "run_at": "document_end",
+      "all_frames": true
     }
   ],
-  "minimum_chrome_version": "102.0",
+  "sidebar_action": {
+    "default_panel": "sidepanel.html",
+    "default_title": "SideHN",
+    "default_icon": {
+      "16": "icon@16.png",
+      "48": "icon@48.png"
+    },
+    "open_at_install": false
+  },
   "browser_specific_settings": {
     "gecko": {
       "id": "sidehn@lowtechguys.com",

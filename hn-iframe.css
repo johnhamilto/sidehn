@@ -1,0 +1,4 @@
+.sidehn-iframe #hnmain > tbody > tr:first-child,
+.sidehn-iframe #hnmain > tbody > tr:last-child {
+  display: none !important;
+}

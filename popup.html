@@ -12,6 +12,7 @@
         align-items: center;
         justify-content: center;
         padding: 8px;
+        gap: 8px;
       }
       h1 {
         font-family: ui-monospace, Menlo, Monaco, "Cascadia Mono",
@@ -51,6 +52,14 @@
         text-decoration: underline;
         color: #ffc39b;
       }
+      label {
+        font-size: 0.8em;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        color: #666;
+      }
       a#ltg-link {
         color: #999;
         font-size: 0.6em;
@@ -63,7 +72,12 @@
   <body>
     <h1>SideHN</h1>
     <button id="permissions">Grant permissions</button>
+    <button id="open-panel" style="display:none">Open HN comments</button>
     <button id="toggle-host">Disable on current tab</button>
+    <label id="persist-label" style="display:none">
+      <input type="checkbox" id="persist" />
+      Keep sidebar open on HN
+    </label>
     <a href="https://github.com/alin23/sidehn" id="source-code-link">Source code</a>
     <a href="https://lowtechguys.com/" id="ltg-link">by "The low-tech guys"</a>
     <script src="popup.js"></script>
