@@ -40,7 +40,7 @@ async function setup() {
   )[0];
   const url = new URL(tab.url);
 
-  // Check if this tab has HN content and offer to open the side panel.
+  // Check if this tab has HN content and the panel isn't already open.
   const openPanelButton = document.getElementById("open-panel");
   const response = await browser.runtime.sendMessage({ type: "get-hn-id" });
   if (response && response.id) {
@@ -64,6 +64,7 @@ async function setup() {
         disabledDomains: settings.disabledDomains,
       })
       .then(() => {
+        browser.tabs.reload();
         toggleHostButton.innerHTML = `<b>${
           settings.disabledDomains[url.hostname] ? "Enable" : "Disable"
         }</b> for <code>${url.hostname}</code>`;
@@ -76,16 +77,24 @@ async function setup() {
       : "Disable"
   }</b> for <code>${url.hostname}</code>`;
 
+  // Keep open checkbox
+  const persistLabel = document.getElementById("persist-label");
+  const persistCheckbox = document.getElementById("persist");
+  const persistSettings = await browser.storage.sync.get("persistSidePanel");
+  persistCheckbox.checked = persistSettings.persistSidePanel || false;
+  persistLabel.style.display = "flex";
+  persistCheckbox.addEventListener("change", () => {
+    browser.storage.sync.set({ persistSidePanel: persistCheckbox.checked });
+  });
+
   const sourceCodeLink = document.getElementById("source-code-link");
   const ltgLink = document.getElementById("ltg-link");
+  sourceCodeLink.style.display = "block";
+  ltgLink.style.display = "block";
   if (url.hostname === "news.ycombinator.com") {
     toggleHostButton.style.display = "none";
-    sourceCodeLink.style.display = "block";
-    ltgLink.style.display = "block";
   } else {
     toggleHostButton.style.display = "block";
-    sourceCodeLink.style.display = "none";
-    ltgLink.style.display = "none";
   }
 }
 

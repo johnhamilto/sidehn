@@ -165,7 +165,8 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const tabId = tabs[0] ? tabs[0].id : null;
       const id = (tabId && tabHnids.get(tabId)) || (persist ? lastHnid : null);
       const hostname = (tabId && tabHostnames.get(tabId)) || (persist ? lastHostname : null);
-      sendResponse({ id, hostname });
+      const active = tabId ? tabHnids.has(tabId) : false;
+      sendResponse({ id, hostname, active });
     });
     return true;
   }
@@ -183,12 +184,20 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
 browser.tabs.onUpdated.addListener(function (tabId, changeInfo) {
   if (changeInfo.status === "complete") {
     setupCookies();
+    // Re-apply badge after navigation since Chrome resets per-tab badge on navigate.
+    if (tabHnids.has(tabId)) {
+      browser.action.setBadgeText({ tabId, text: "HN" });
+      browser.action.setBadgeBackgroundColor({ tabId, color: "#ff6600" });
+    }
   }
 
   if (changeInfo.url) {
     const url = new URL(changeInfo.url);
     if (url.hostname === "news.ycombinator.com") {
       deactivateTab(tabId);
+    } else if (tabHnids.has(tabId)) {
+      browser.action.setBadgeText({ tabId, text: "HN" });
+      browser.action.setBadgeBackgroundColor({ tabId, color: "#ff6600" });
     }
   }
 });

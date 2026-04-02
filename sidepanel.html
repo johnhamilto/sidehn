@@ -10,57 +10,6 @@
         display: flex;
         flex-direction: column;
       }
-      #toolbar {
-        display: flex;
-        align-items: center;
-        padding: 4px 8px;
-        background: transparent;
-        font-family: Verdana, Geneva, sans-serif;
-        font-size: 11px;
-        color: #828282;
-        flex-shrink: 0;
-        gap: 8px;
-      }
-      #gear {
-        background: none;
-        border: none;
-        cursor: pointer;
-        font-size: 14px;
-        padding: 2px 4px;
-        color: #828282;
-        line-height: 1;
-      }
-      #gear:hover {
-        color: #000;
-      }
-      .controls {
-        display: none;
-        align-items: center;
-        gap: 8px;
-      }
-      .controls.visible {
-        display: flex;
-      }
-      .controls button {
-        background: none;
-        border: 1px solid #828282;
-        border-radius: 3px;
-        padding: 2px 6px;
-        cursor: pointer;
-        font-family: inherit;
-        font-size: 11px;
-        color: #828282;
-      }
-      .controls button:hover {
-        color: #000;
-        border-color: #000;
-      }
-      .controls label {
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        gap: 4px;
-      }
       #frame-container {
         flex: 1;
         position: relative;
@@ -83,16 +32,6 @@
     </style>
   </head>
   <body>
-    <div id="toolbar">
-      <button id="gear">&#9881;</button>
-      <div class="controls" id="controls">
-        <label>
-          <input type="checkbox" id="persist" />
-          Keep open
-        </label>
-        <button id="disable-domain">Disable</button>
-      </div>
-    </div>
     <div id="frame-container">
       <iframe id="hn-frame-a" class="front"></iframe>
       <iframe id="hn-frame-b" class="behind"></iframe>
