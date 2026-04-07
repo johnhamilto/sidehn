@@ -2,3 +2,4 @@ web-ext-artifacts
 _metadata
 screenshots
 manifest.json
+.vscode/
